@@ -20,6 +20,7 @@ export interface Course {
 export interface TopicSchedule {
   topicId: string;
   expectedDate: string;
+  overdueReason?: string;
 }
 
 export interface Batch {

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useProgress } from '../hooks/useProgress';
 import { DualProgressBar } from '../components/ProgressBar';
 import { getStatusConfig } from '../components/BatchCard';
@@ -10,7 +11,8 @@ import { format } from 'date-fns';
 const BatchDetails: React.FC = () => {
   const { batchId } = useParams<{ batchId: string }>();
   const navigate = useNavigate();
-  const { batches, courses, batchProgress, toggleTopicProgress, updateTopicCompletionDate, updateBatch } = useAppContext();
+  const { user } = useAuth();
+  const { batches, courses, batchProgress, toggleTopicProgress, updateTopicCompletionDate, updateBatch, updateOverdueReason } = useAppContext();
 
   const batch = batches.find((b) => b.id === batchId);
   const course = useMemo(() => courses.find((c) => c.id === batch?.courseId), [courses, batch?.courseId]);
@@ -19,6 +21,8 @@ const BatchDetails: React.FC = () => {
 
   const [editingTopic, setEditingTopic] = useState<string | null>(null);
   const [editDateTime, setEditDateTime] = useState('');
+  const [editingReason, setEditingReason] = useState<string | null>(null);
+  const [reasonValue, setReasonValue] = useState('');
 
   // Batch editing state
   const [isEditingBatch, setIsEditingBatch] = useState(false);
@@ -63,6 +67,23 @@ const BatchDetails: React.FC = () => {
   const cancelEdit = () => {
     setEditingTopic(null);
     setEditDateTime('');
+  };
+ 
+  const startEditingReason = (topicId: string, currentReason: string) => {
+    setEditingReason(topicId);
+    setReasonValue(currentReason || '');
+  };
+ 
+  const saveReason = async (topicId: string) => {
+    if (batchId) {
+      await updateOverdueReason(batchId, topicId, reasonValue);
+      setEditingReason(null);
+    }
+  };
+ 
+  const cancelReasonEdit = () => {
+    setEditingReason(null);
+    setReasonValue('');
   };
 
   // Batch editing functions
@@ -385,17 +406,55 @@ const BatchDetails: React.FC = () => {
                                </button>
                              </div>
                            )}
-                           {overdue && !isCompleted && (
-                             <div className="mt-2 p-3 bg-red-100 border border-red-300 rounded-lg">
-                               <p className="text-sm text-red-800 font-bold flex items-center gap-2">
-                                 <span className="text-lg">🚨</span>
-                                 CRITICAL: Should have been completed by {format(new Date(schedule!.expectedDate), 'MMM d, yyyy')}
-                               </p>
-                               <p className="text-xs text-red-600 mt-1">
-                                 This topic is behind schedule and needs immediate attention!
-                               </p>
-                             </div>
-                           )}
+                            {overdue && schedule && !isCompleted && !editingReason && (
+                              <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-xl">
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="flex-1">
+                                    <p className="text-xs font-bold text-red-800 flex items-center gap-1 mb-1">
+                                      <AlertTriangle size={12} /> REASON FOR DELAY
+                                    </p>
+                                    <p className="text-sm text-slate-700 italic">
+                                      {schedule.overdueReason || "No reason provided by trainer yet."}
+                                    </p>
+                                  </div>
+                                  {user?.role === 'instructor' && (
+                                    <button 
+                                      onClick={() => startEditingReason(topic.id, schedule.overdueReason || '')}
+                                      className="text-primary hover:text-primary/80"
+                                    >
+                                      <Edit3 size={14} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+ 
+                            {editingReason === topic.id && (
+                              <div className="mt-2 p-4 bg-primary/5 border border-primary/20 rounded-2xl shadow-sm">
+                                <label className="block text-xs font-bold text-primary uppercase tracking-wider mb-2">Edit Overdue Reason</label>
+                                <textarea
+                                  value={reasonValue}
+                                  onChange={(e) => setReasonValue(e.target.value)}
+                                  className="w-full px-4 py-3 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none min-h-[80px]"
+                                  placeholder="Explain why this topic is overdue..."
+                                />
+                                <div className="flex items-center gap-2 mt-3">
+                                  <button 
+                                    onClick={() => saveReason(topic.id)}
+                                    className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 transition-all shadow-sm"
+                                  >
+                                    <Save size={14} /> Save Reason
+                                  </button>
+                                  <button 
+                                    onClick={cancelReasonEdit}
+                                    className="px-4 py-2 text-slate-500 hover:text-slate-800 text-xs font-bold transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+ 
                            {isEditing && (
                              <div className="mt-2 flex items-center gap-2">
                                <input
